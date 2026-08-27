@@ -311,6 +311,29 @@ async def test_support_from_carries_the_evidence_behind_support_needed(settings,
     assert row.Support_From.confidence != "low", "it is not unevidenced"
 
 
+async def test_empty_support_from_defaults_to_other(settings, inputs):
+    """Agent compose must leave at least one Support_From tick on the draft."""
+    narratives = default_narratives(support_from=[])
+    _, result = await run_to_review(ScriptedClient(narratives=narratives), settings, inputs)
+
+    assert result["row"].Support_From.value == ["Other"]
+
+
+async def test_empty_support_from_with_support_needed_inherits_claims(settings, inputs):
+    from app.schema import NarrativeField
+
+    narratives = default_narratives(
+        support_needed=NarrativeField(text="Help from an unnamed team.", claim_ids=["E2.1"]),
+        support_from=[],
+    )
+    _, result = await run_to_review(ScriptedClient(narratives=narratives), settings, inputs)
+
+    row = result["row"]
+    assert row.Support_From.value == ["Other"]
+    assert row.Support_From.claim_ids == ["E2.1"]
+    assert row.Support_From.confidence != "low"
+
+
 async def test_a_conflict_that_supersedes_nothing_becomes_a_gap(settings, inputs):
     """The distinction is guaranteed here, not left to the model to observe."""
     from app.schema import Conflict, Reconciliation

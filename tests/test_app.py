@@ -7,6 +7,7 @@ recorded as a correction, and that no route submits anything.
 """
 
 import json
+import re
 
 import pytest
 from fastapi.testclient import TestClient
@@ -92,6 +93,27 @@ def start_run(http) -> str:
     raise AssertionError(f"run {thread_id} never finished")
 
 
+def acknowledge_all_fields(http, thread_id: str) -> None:
+    """POST every draft field once so Approve and export can unlock."""
+    row = http.get(f"/runs/{thread_id}/state.json").json()["row"]
+    for field, proposal in row.items():
+        if not isinstance(proposal, dict) or "edited_by_director" not in proposal:
+            continue
+        if proposal.get("edited_by_director"):
+            continue
+        value = proposal.get("value")
+        if field == "Support_From":
+            data = [("Support_From", item) for item in (value or [])]
+        elif field == "Progress_Percent":
+            data = {field: "" if value is None else str(value)}
+        else:
+            data = {field: "" if value is None else value}
+        assert http.post(f"/runs/{thread_id}/field/{field}", data=data).status_code in {
+            200,
+            303,
+        }
+
+
 # --- landing -----------------------------------------------------------------
 
 
@@ -100,6 +122,22 @@ def test_runs_home_renders(client):
     body = http.get("/").text
     assert "Quarterly update drafter" in body
     assert "New run" in body
+
+
+def test_inlined_assets_are_not_html_escaped(client):
+    """Row clicks and child selectors break if Jinja escapes the inlined bundle."""
+    http, _ = client
+    body = http.get("/").text
+    assert 'closest("tr.rowlink[data-href]")' in body
+    assert "&#34;tr.rowlink" not in body
+    assert ".brand > span:last-child" in body
+    assert ".brand &gt; span" not in body
+
+
+def test_runs_table_rows_link_to_the_detail_page(client):
+    http, _ = client
+    body = http.get("/").text
+    assert 'data-href="/runs/' in body or 'href="/runs/' in body
 
 
 def test_new_run_lists_the_evidence_and_the_objective(client):
@@ -171,11 +209,70 @@ def test_editing_a_field_records_a_correction_and_persists(client):
         headers={"X-Requested-With": "fetch"},
     )
     assert response.status_code == 200
-    assert "you changed this" in response.text
+    assert "acknowledged" in response.text
 
     state = http.get(f"/runs/{thread_id}/state.json").json()
     assert state["row"]["Key_Success"]["value"] == "Smaller than we said."
     assert state["row"]["Key_Success"]["edited_by_director"] is True
+
+
+def test_acknowledging_again_returns_the_field_to_normal_mode(client):
+    http, _ = client
+    thread_id = start_run(http)
+    original = http.get(f"/runs/{thread_id}/state.json").json()["row"]["Progress_Percent"][
+        "value"
+    ]
+
+    ack = http.post(
+        f"/runs/{thread_id}/field/Progress_Percent",
+        data={"Progress_Percent": "40"},
+        headers={"X-Requested-With": "fetch"},
+    )
+    assert ack.status_code == 200
+    assert 'data-field-ack="1"' in ack.text
+    assert "btn-ack-done" in ack.text
+
+    undo = http.post(
+        f"/runs/{thread_id}/field/Progress_Percent",
+        data={"Progress_Percent": "40"},
+        headers={"X-Requested-With": "fetch"},
+    )
+    assert undo.status_code == 200
+    assert 'data-field-ack="0"' in undo.text
+    assert "btn-ack-done" not in undo.text
+
+    state = http.get(f"/runs/{thread_id}/state.json").json()
+    assert state["row"]["Progress_Percent"]["edited_by_director"] is False
+    assert state["row"]["Progress_Percent"]["value"] == original
+    assert not any(
+        c["field"] == "Progress_Percent" for c in state.get("corrections", [])
+    )
+
+    acknowledge_all_fields(http, thread_id)
+    assert (
+        http.post(f"/runs/{thread_id}/approve", follow_redirects=False).status_code
+        == 303
+    )
+
+    # Start a fresh run so we can prove clearing one ack locks export again.
+    thread_id = start_run(http)
+    acknowledge_all_fields(http, thread_id)
+    value = http.get(f"/runs/{thread_id}/state.json").json()["row"]["Progress_Percent"][
+        "value"
+    ]
+    cleared = http.post(
+        f"/runs/{thread_id}/field/Progress_Percent",
+        data={"Progress_Percent": "" if value is None else str(value)},
+        headers={"X-Requested-With": "fetch"},
+    )
+    assert 'data-field-ack="0"' in cleared.text
+    assert http.get(f"/runs/{thread_id}/state.json").json()["row"]["Progress_Percent"][
+        "edited_by_director"
+    ] is False
+
+    blocked = http.post(f"/runs/{thread_id}/approve", follow_redirects=False)
+    assert blocked.status_code == 400
+    assert "Acknowledge every field" in blocked.text
 
 
 def test_editing_the_same_field_twice_keeps_one_correction(client):
@@ -189,10 +286,12 @@ def test_editing_the_same_field_twice_keeps_one_correction(client):
             headers={"X-Requested-With": "fetch"},
         )
 
+    acknowledge_all_fields(http, thread_id)
     http.post(f"/runs/{thread_id}/stage", follow_redirects=False)
     lines = (settings.run_dir(thread_id) / "corrections.jsonl").read_text().strip().splitlines()
-    assert len(lines) == 1
-    assert json.loads(lines[0])["director_value"] == "Second go."
+    key_challenge = [json.loads(line) for line in lines if json.loads(line)["field"] == "Key_Challenge"]
+    assert len(key_challenge) == 1
+    assert key_challenge[0]["director_value"] == "Second go."
 
 
 def test_traffic_light_can_be_overridden_by_the_director(client):
@@ -275,6 +374,7 @@ def test_trend_field_cannot_be_set_through_the_api(client):
 def test_staging_writes_a_file_that_is_not_submitted(client):
     http, settings = client
     thread_id = start_run(http)
+    acknowledge_all_fields(http, thread_id)
 
     http.post(f"/runs/{thread_id}/stage", follow_redirects=False)
 
@@ -285,11 +385,72 @@ def test_staging_writes_a_file_that_is_not_submitted(client):
     assert staged["thread_id"] == thread_id
 
 
+def test_acknowledge_all_marks_every_field_and_unlocks_export(client):
+    http, _ = client
+    thread_id = start_run(http)
+
+    body = http.get(f"/runs/{thread_id}").text
+    assert "Acknowledge all" in body
+    assert 'data-ack-all' in body
+    footer = body.split('id="approve-footer"', 1)[1]
+    assert footer.index("data-ack-all") < footer.index("data-open-approve")
+    assert "footer-actions" in footer
+
+    response = http.post(
+        f"/runs/{thread_id}/acknowledge-all", follow_redirects=False
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/runs/{thread_id}"
+
+    state = http.get(f"/runs/{thread_id}/state.json").json()
+    for field, proposal in state["row"].items():
+        if isinstance(proposal, dict) and "edited_by_director" in proposal:
+            assert proposal["edited_by_director"] is True, field
+
+    review = http.get(f"/runs/{thread_id}").text
+    assert "✓ All acknowledged" in review
+    approve_btn = re.search(r"<button\b[^>]*\bdata-open-approve\b[^>]*>", review)
+    assert approve_btn is not None
+    assert "disabled" not in approve_btn.group(0)
+
+    # Toggle off — clears every acknowledgement and locks export again.
+    cleared = http.post(f"/runs/{thread_id}/acknowledge-all", follow_redirects=False)
+    assert cleared.status_code == 303
+    state = http.get(f"/runs/{thread_id}/state.json").json()
+    for field, proposal in state["row"].items():
+        if isinstance(proposal, dict) and "edited_by_director" in proposal:
+            assert proposal["edited_by_director"] is False, field
+    locked = http.get(f"/runs/{thread_id}").text
+    assert "Acknowledge all" in locked
+    approve_btn = re.search(r"<button\b[^>]*\bdata-open-approve\b[^>]*>", locked)
+    assert approve_btn is not None
+    assert "disabled" in approve_btn.group(0)
+    assert http.post(f"/runs/{thread_id}/approve", follow_redirects=False).status_code == 400
+
+
+def test_staging_is_blocked_until_every_field_is_acknowledged(client):
+    http, settings = client
+    thread_id = start_run(http)
+
+    response = http.post(f"/runs/{thread_id}/approve", follow_redirects=False)
+    assert response.status_code == 400
+    assert "Acknowledge every field" in response.text
+    assert not (settings.run_dir(thread_id) / "staged_row.json").exists()
+
+    body = http.get(f"/runs/{thread_id}").text
+    assert "Acknowledged" in body
+    assert "Acknowledge every field above before export unlocks" in body
+    approve_btn = re.search(r"<button\b[^>]*\bdata-open-approve\b[^>]*>", body)
+    assert approve_btn is not None
+    assert "disabled" in approve_btn.group(0)
+
+
 def test_staged_row_is_downloadable_after_staging(client):
     http, _ = client
     thread_id = start_run(http)
     assert http.get(f"/runs/{thread_id}/staged.json").status_code == 404
 
+    acknowledge_all_fields(http, thread_id)
     http.post(f"/runs/{thread_id}/stage", follow_redirects=False)
     assert http.get(f"/runs/{thread_id}/staged.json").json()["submitted"] is False
 
@@ -297,10 +458,45 @@ def test_staged_row_is_downloadable_after_staging(client):
 def test_review_page_says_staged_not_submitted(client):
     http, _ = client
     thread_id = start_run(http)
+    acknowledge_all_fields(http, thread_id)
     http.post(f"/runs/{thread_id}/stage", follow_redirects=False)
 
     body = http.get(f"/runs/{thread_id}").text
     assert "waiting for you to submit it" in body
+    export_btn = re.search(r"<a\b[^>]*\bdata-open-export\b[^>]*>", body)
+    assert export_btn is not None
+    assert "aria-disabled" not in export_btn.group(0)
+
+
+def test_open_export_stays_locked_until_every_field_is_acknowledged(client):
+    http, settings = client
+    thread_id = start_run(http)
+    acknowledge_all_fields(http, thread_id)
+    assert http.post(f"/runs/{thread_id}/stage", follow_redirects=False).status_code == 303
+
+    # Un-acknowledge one field — Open export must lock and export routes refuse.
+    value = http.get(f"/runs/{thread_id}/state.json").json()["row"]["Progress_Percent"][
+        "value"
+    ]
+    cleared = http.post(
+        f"/runs/{thread_id}/field/Progress_Percent",
+        data={"Progress_Percent": "" if value is None else str(value)},
+        headers={"X-Requested-With": "fetch"},
+    )
+    assert 'data-field-ack="0"' in cleared.text
+
+    body = http.get(f"/runs/{thread_id}").text
+    export_btn = re.search(r"<a\b[^>]*\bdata-open-export\b[^>]*>", body)
+    assert export_btn is not None
+    assert 'aria-disabled="true"' in export_btn.group(0)
+    assert "Acknowledge every field above before export unlocks" in body
+
+    blocked = http.get(f"/runs/{thread_id}/export", follow_redirects=False)
+    assert blocked.status_code == 303
+    assert blocked.headers["location"] == f"/runs/{thread_id}"
+    assert http.get(f"/runs/{thread_id}/staged.json").status_code == 400
+    assert http.get(f"/runs/{thread_id}/export.csv").status_code == 400
+    assert (settings.run_dir(thread_id) / "staged_row.json").exists()
 
 
 # --- evidence ----------------------------------------------------------------
@@ -503,10 +699,8 @@ def test_drafting_without_a_key_explains_itself(keyless):
 def test_the_draft_button_is_never_silently_disabled(keyless):
     body = keyless.get("/runs/new").text
     assert "No model connected yet" in body
-    # Attribute on controls — not the inlined `.btn:disabled` stylesheet rule.
-    assert " disabled" not in body, "explain instead of disabling"
-    assert 'disabled="' not in body
-    assert "disabled='" not in body
+    # Attribute on controls — not stylesheet/:disabled or aria-disabled in JS.
+    assert not re.search(r"<(button|input)\b[^>]*\sdisabled\b", body, re.I)
 
 
 def test_a_failed_run_shows_a_page_not_a_stack_trace(client, monkeypatch):
@@ -602,6 +796,39 @@ def test_evidence_can_be_removed(client, data_dir):
     assert "Removed" in response.text
     assert not (data_dir / "evidence" / "late.md").exists()
     assert "1 document" in response.text
+
+
+def test_a_run_can_be_deleted(client, data_dir):
+    http, settings = client
+    thread_id = start_run(http)
+    acknowledge_all_fields(http, thread_id)
+    http.post(f"/runs/{thread_id}/stage", follow_redirects=False)
+    assert (settings.run_dir(thread_id) / "staged_row.json").exists()
+
+    home = http.get("/").text
+    assert f'action="/runs/{thread_id}/delete"' in home
+    assert 'aria-label="Delete run' in home
+
+    response = http.post(f"/runs/{thread_id}/delete", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"
+
+    assert not settings.run_dir(thread_id).exists()
+    assert http.get(f"/runs/{thread_id}").status_code == 404
+    assert thread_id not in http.get("/").text
+    assert (data_dir / "evidence" / "early.md").exists()
+    assert (data_dir / "evidence" / "late.md").exists()
+
+
+def test_run_delete_refuses_reserved_ids(client, tmp_path):
+    http, settings = client
+    settings.understanding_dir.mkdir(parents=True, exist_ok=True)
+    marker = settings.understanding_dir / "keep.txt"
+    marker.write_text("stay", encoding="utf-8")
+
+    response = http.post("/runs/understanding/delete", follow_redirects=False)
+    assert response.status_code == 400
+    assert marker.exists()
 
 
 def test_traversal_through_the_url_is_refused(client, data_dir):

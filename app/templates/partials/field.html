@@ -1,12 +1,16 @@
 {% from "partials/macros.html" import cite_chip %}
 {% set proposal = row.proposals()[field_name] %}
 
-<article class="proposal" id="field-{{ field_name }}">
+<article
+  class="proposal"
+  id="field-{{ field_name }}"
+  data-field-ack="{{ '1' if proposal.edited_by_director else '0' }}"
+>
 
   <div class="proposal-head">
     <h3 class="proposal-name">{{ field_name.replace("_", " ") }}</h3>
     {% if proposal.edited_by_director %}
-      <span class="pill pill-overridden">you changed this</span>
+      <span class="pill pill-overridden">acknowledged</span>
     {% elif proposal.needs_director_input %}
       <span class="pill pill-status review">needs your input</span>
     {% else %}
@@ -62,7 +66,13 @@
       {% endif %}
     {% endif %}
 
-    <button type="submit" class="btn btn-sm btn-quiet" style="margin-top:0.6rem">Save</button>
+    <button
+      type="submit"
+      class="btn btn-sm btn-ack{% if proposal.edited_by_director %} btn-ack-done{% endif %}"
+      title="{% if proposal.edited_by_director %}Click again to undo acknowledgement{% else %}Acknowledge this field{% endif %}"
+    >
+      {% if proposal.edited_by_director %}✓ Acknowledged{% else %}Acknowledged{% endif %}
+    </button>
   </form>
 
   {% if proposal.rationale %}

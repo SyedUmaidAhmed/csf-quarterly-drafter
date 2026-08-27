@@ -14,7 +14,52 @@
 
   var EASE = "cubic-bezier(.4,0,.2,1)";
   var THEME_KEY = "csf-theme";
+  var API_KEY_STORAGE = "csf-api-key";
   var lastFocus = null;
+
+  function readStoredApiKey() {
+    try {
+      return (localStorage.getItem(API_KEY_STORAGE) || "").trim();
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function writeStoredApiKey(key) {
+    try {
+      if (key) localStorage.setItem(API_KEY_STORAGE, key);
+      else localStorage.removeItem(API_KEY_STORAGE);
+    } catch (e) {}
+  }
+
+  function serverHasKey() {
+    return document.body && document.body.getAttribute("data-has-key") === "1";
+  }
+
+  async function restoreApiKeyFromCache() {
+    if (serverHasKey()) return false;
+    var key = readStoredApiKey();
+    if (!key) return false;
+
+    try {
+      var body = new FormData();
+      body.append("api_key", key);
+      var response = await fetch("/settings/key", {
+        method: "POST",
+        body: body,
+        headers: { "X-Requested-With": "fetch" },
+        redirect: "follow",
+      });
+      if (!response.ok) {
+        writeStoredApiKey("");
+        return false;
+      }
+      window.location.reload();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
 
   function flash(element) {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -65,6 +110,49 @@
     if (!replacement) return;
     target.replaceWith(replacement);
     flash(replacement);
+    refreshApproveGate();
+  }
+
+  function refreshApproveGate() {
+    var footer = document.getElementById("approve-footer");
+    if (!footer) return;
+
+    var total = Number(footer.getAttribute("data-ack-total") || 0);
+    var done = document.querySelectorAll("[data-field-ack='1']").length;
+    var ready = total > 0 && done >= total;
+
+    var approve = document.querySelector("[data-open-approve]");
+    if (approve) {
+      approve.disabled = !ready;
+      if (ready) approve.removeAttribute("aria-disabled");
+      else approve.setAttribute("aria-disabled", "true");
+    }
+
+    var exportLink = document.querySelector("[data-open-export]");
+    if (exportLink) {
+      if (ready) {
+        exportLink.removeAttribute("aria-disabled");
+        exportLink.removeAttribute("tabindex");
+      } else {
+        exportLink.setAttribute("aria-disabled", "true");
+        exportLink.setAttribute("tabindex", "-1");
+      }
+    }
+
+    var hint = document.getElementById("ack-gate-hint");
+    if (hint) hint.hidden = ready;
+
+    var count = document.getElementById("ack-gate-count");
+    if (count) count.textContent = String(done);
+
+    document.querySelectorAll("[data-ack-all]").forEach(function (ackAll) {
+      ackAll.disabled = false;
+      ackAll.textContent = ready ? "✓ All acknowledged" : "Acknowledge all";
+      ackAll.classList.toggle("btn-ack-done", ready);
+      ackAll.title = ready
+        ? "Click again to clear all acknowledgements"
+        : "Acknowledge every field";
+    });
   }
 
   async function saveField(form, event) {
@@ -259,6 +347,20 @@
       return;
     }
 
+    var submitter = event.submitter;
+    var action = (
+      (submitter && submitter.getAttribute("formaction")) ||
+      form.getAttribute("action") ||
+      ""
+    ).replace(/\/$/, "");
+    if (action.endsWith("/settings/key")) {
+      var input = form.querySelector('input[name="api_key"]');
+      var value = input ? input.value.trim() : "";
+      if (value) writeStoredApiKey(value);
+    } else if (action.endsWith("/settings/key/clear")) {
+      writeStoredApiKey("");
+    }
+
     var busy = form.getAttribute("data-busy");
     if (busy) {
       var button = form.querySelector("button[type=submit]");
@@ -288,7 +390,15 @@
     }
 
     if (event.target.closest("[data-open-approve]")) {
+      var openBtn = event.target.closest("[data-open-approve]");
+      if (openBtn.disabled) return;
       openApprove();
+      return;
+    }
+
+    var exportLink = event.target.closest("[data-open-export]");
+    if (exportLink && exportLink.getAttribute("aria-disabled") === "true") {
+      event.preventDefault();
       return;
     }
 
@@ -350,7 +460,9 @@
   document.addEventListener("DOMContentLoaded", function () {
     applyTheme(currentTheme());
     tagCitationsWithThread();
+    refreshApproveGate();
     var list = document.getElementById("progress");
     if (list) followRun(list);
+    restoreApiKeyFromCache();
   });
 })();

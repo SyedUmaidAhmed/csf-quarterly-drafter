@@ -296,6 +296,9 @@ class Nodes:
                 needs_director_input=field.needs_director_input or field.text is None,
             )
 
+        # Empty agent output becomes Other so the review form always has a tick.
+        support_from = narratives.support_from or ["Other"]
+
         return DraftRow(
             Objective_ID=state["objective"].get("Objective_ID", "unknown"),
             Quarter=state["quarter"],
@@ -317,9 +320,9 @@ class Nodes:
             # Support_From names the function behind Support_Needed, so it
             # rests on the same evidence rather than on none at all.
             Support_From=proposal(
-                narratives.support_from,
-                narratives.support_needed.claim_ids if narratives.support_from else [],
-                abstained=not narratives.support_from,
+                support_from,
+                narratives.support_needed.claim_ids if support_from else [],
+                abstained=not support_from,
             ),
         )
 

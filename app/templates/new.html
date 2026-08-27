@@ -33,7 +33,7 @@
       <form method="post" action="/settings/key" autocomplete="off" class="field-row">
         <input type="password" name="api_key" class="input-key" placeholder="sk-ant-..."
                autocomplete="off" spellcheck="false" aria-label="Anthropic API key">
-        <button type="submit" class="btn btn-sm btn-quiet">
+        <button type="submit" class="btn btn-sm btn-key">
           {% if has_key %}Replace{% else %}Use this key{% endif %}
         </button>
         {% if key_source == "entered here" %}
@@ -41,8 +41,9 @@
         {% endif %}
       </form>
       <p class="fine" style="margin-top:0.7rem">
-        Held in this server process only. Not written to disk, not logged, gone
-        when the server stops.
+        Saved in this browser after you enter it once, then restored
+        automatically when the server restarts. Not logged, not written to
+        the server disk.
       </p>
     </div>
   </section>

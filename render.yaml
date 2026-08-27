@@ -2,9 +2,15 @@ services:
   - type: web
     name: csf-quarterly-drafter
     runtime: python
-    plan: free
+    plan: starter
+    region: singapore
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    disk:
+      name: csf-runs
+      mountPath: /opt/render/project/src/runs
+      sizeGB: 1
     envVars:
       - key: ANTHROPIC_API_KEY
         sync: false

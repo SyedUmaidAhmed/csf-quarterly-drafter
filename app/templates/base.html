@@ -8,8 +8,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  {# Inlined so free-tier cold starts cannot 404 /static/* and leave the page bare. #}
-  <style>{{ inline_css }}</style>
+  {# Inlined so free-tier cold starts cannot 404 /static/* and leave the page bare.
+     Must be |safe — Jinja autoescape would turn JS quotes into &#34; and CSS
+     child selectors (>) into &gt;, breaking row clicks and layout. #}
+  <style>{{ inline_css | safe }}</style>
   <script>
     (function () {
       try {
@@ -21,10 +23,10 @@
       } catch (e) {}
     })();
   </script>
-  <script>{{ inline_js }}</script>
+  <script>{{ inline_js | safe }}</script>
   {% block head %}{% endblock %}
 </head>
-<body>
+<body data-has-key="{{ '1' if has_key else '0' }}">
   <a class="skip" href="#main">Skip to content</a>
 
   <header class="app-header">
@@ -84,7 +86,7 @@
       {% endif %}
 
       <div class="side-group">
-        <div class="side-meta" style="white-space:normal;line-height:16px">
+        <div class="side-meta" style="line-height:16px">
           AI never writes to the system of record. Approve and export stages a
           row for the director to submit themselves.
         </div>

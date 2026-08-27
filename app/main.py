@@ -15,7 +15,10 @@ import datetime as dt
 import io
 import json
 import logging
+import re
+import shutil
 import uuid
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -271,6 +274,27 @@ def thread_config(thread_id: str) -> dict:
     return {"configurable": {"thread_id": thread_id}}
 
 
+_THREAD_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+
+
+def safe_run_dir(thread_id: str) -> Path:
+    """Resolve a run folder inside runs_dir, or refuse path tricks."""
+    if (
+        not thread_id
+        or "/" in thread_id
+        or "\\" in thread_id
+        or ".." in thread_id
+        or thread_id in {"understanding"}
+        or not _THREAD_ID_RE.match(thread_id)
+    ):
+        raise HTTPException(400, "invalid run id")
+
+    run_dir = settings.run_dir(thread_id).resolve()
+    if run_dir.parent != settings.runs_dir.resolve():
+        raise HTTPException(400, "invalid run id")
+    return run_dir
+
+
 # --- landing / workspace -----------------------------------------------------
 
 
@@ -437,6 +461,29 @@ async def create_run(request: Request, quarter: str = Form(default="")):
     return RedirectResponse(f"/runs/{thread_id}", status_code=303)
 
 
+@app.post("/runs/{thread_id}/delete")
+async def delete_run(thread_id: str):
+    """Remove a draft run. Evidence files under data/ are left alone."""
+    run_dir = safe_run_dir(thread_id)
+
+    run = progress.registry.get(thread_id)
+    if run is not None and run.task is not None and not run.task.done():
+        run.task.cancel()
+        try:
+            await run.task
+        except asyncio.CancelledError:
+            pass
+    progress.registry.forget(thread_id)
+
+    async with open_graph(graph_client(), settings) as graph:
+        await graph.checkpointer.adelete_thread(thread_id)
+
+    if run_dir.is_dir():
+        shutil.rmtree(run_dir)
+
+    return RedirectResponse("/", status_code=303)
+
+
 async def _execute(thread_id: str, run_settings, run: progress.Run) -> None:
     """Run the graph, publishing each stage as it completes."""
     seen: dict[str, int] = {}
@@ -601,7 +648,7 @@ def review_context(thread_id: str, state: dict) -> dict:
 
 @app.post("/runs/{thread_id}/field/{field}", response_class=HTMLResponse)
 async def edit_field(request: Request, thread_id: str, field: str):
-    """Record a director's edit to one field and re-render just that field."""
+    """Acknowledge a field, update it, or toggle back to the draft proposal."""
     state = await load_state(thread_id)
     row: DraftRow | None = state.get("row")
     if row is None or field not in row.proposals():
@@ -610,21 +657,33 @@ async def edit_field(request: Request, thread_id: str, field: str):
     form = await request.form()
     value = _coerce(field, form)
     proposal = getattr(row, field)
+    corrections = list(state.get("corrections", []))
+    existing = next((c for c in corrections if c.field == field), None)
 
-    correction = Correction(
-        field=field,
-        proposed_value=proposal.value,
-        director_value=value,
-        claim_ids_shown=proposal.claim_ids,
-        timestamp=dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
-    )
-
-    corrections = [c for c in state.get("corrections", []) if c.field != field]
-    corrections.append(correction)
-
-    proposal.value = value
-    proposal.edited_by_director = True
-    proposal.needs_director_input = False
+    # Second press with the same value clears the acknowledgement and restores
+    # the draft proposal so export locks again until every field is re-acked.
+    if proposal.edited_by_director and _same_field_value(field, proposal.value, value):
+        corrections = [c for c in corrections if c.field != field]
+        if existing is not None:
+            proposal.value = existing.proposed_value
+        proposal.edited_by_director = False
+        if field in vocab.SIGNIFICANT_FIELDS and proposal.value is None:
+            proposal.needs_director_input = True
+    else:
+        correction = Correction(
+            field=field,
+            proposed_value=(
+                existing.proposed_value if existing is not None else proposal.value
+            ),
+            director_value=value,
+            claim_ids_shown=proposal.claim_ids,
+            timestamp=dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        )
+        corrections = [c for c in corrections if c.field != field]
+        corrections.append(correction)
+        proposal.value = value
+        proposal.edited_by_director = True
+        proposal.needs_director_input = False
 
     async with open_graph(graph_client(), settings) as graph:
         await graph.aupdate_state(
@@ -639,6 +698,12 @@ async def edit_field(request: Request, thread_id: str, field: str):
     return templates.TemplateResponse(request, "partials/field.html", context)
 
 
+def _same_field_value(field: str, left: Any, right: Any) -> bool:
+    if field == "Support_From":
+        return list(left or []) == list(right or [])
+    return left == right
+
+
 def _coerce(field: str, form) -> Any:
     if field == "Progress_Percent":
         raw = (form.get(field) or "").strip()
@@ -650,6 +715,60 @@ def _coerce(field: str, form) -> Any:
         return [v for v in form.getlist(field) if v in vocab.SUPPORT_FROM]
     value = (form.get(field) or "").strip()
     return value or None
+
+
+@app.post("/runs/{thread_id}/acknowledge-all")
+async def acknowledge_all_fields_route(thread_id: str):
+    """Toggle: acknowledge every field, or clear all acknowledgements."""
+    state = await load_state(thread_id)
+    row: DraftRow | None = state.get("row")
+    if row is None:
+        raise HTTPException(404, "no draft to acknowledge")
+
+    proposals = row.proposals()
+    all_acked = bool(proposals) and all(p.edited_by_director for p in proposals.values())
+    corrections = list(state.get("corrections", []))
+    stamp = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+
+    if all_acked:
+        # Second press — restore draft proposals and lock export again.
+        kept: list[Correction] = []
+        for field, proposal in proposals.items():
+            existing = next((c for c in corrections if c.field == field), None)
+            if existing is not None:
+                proposal.value = existing.proposed_value
+            proposal.edited_by_director = False
+            if field in vocab.SIGNIFICANT_FIELDS and proposal.value is None:
+                proposal.needs_director_input = True
+        corrections = kept
+    else:
+        for field, proposal in proposals.items():
+            if proposal.edited_by_director:
+                continue
+            existing = next((c for c in corrections if c.field == field), None)
+            corrections = [c for c in corrections if c.field != field]
+            corrections.append(
+                Correction(
+                    field=field,
+                    proposed_value=(
+                        existing.proposed_value
+                        if existing is not None
+                        else proposal.value
+                    ),
+                    director_value=proposal.value,
+                    claim_ids_shown=proposal.claim_ids,
+                    timestamp=stamp,
+                )
+            )
+            proposal.edited_by_director = True
+            proposal.needs_director_input = False
+
+    async with open_graph(graph_client(), settings) as graph:
+        await graph.aupdate_state(
+            thread_config(thread_id), {"row": row, "corrections": corrections}
+        )
+
+    return RedirectResponse(f"/runs/{thread_id}", status_code=303)
 
 
 # --- staging / approve -------------------------------------------------------
@@ -695,11 +814,30 @@ async def approve(thread_id: str):
     return RedirectResponse(f"/runs/{thread_id}/export", status_code=303)
 
 
+async def _require_acknowledged(thread_id: str) -> dict[str, Any]:
+    """Load run state and refuse export until every field is acknowledged."""
+    state = await load_state(thread_id)
+    row: DraftRow | None = state.get("row")
+    pending = [
+        name
+        for name, proposal in (row.proposals().items() if row else [])
+        if not proposal.edited_by_director
+    ]
+    if pending:
+        raise HTTPException(
+            400,
+            "Acknowledge every field before export. "
+            f"Still needed: {', '.join(pending)}.",
+        )
+    return state
+
+
 @app.get("/runs/{thread_id}/staged.json")
 async def staged_json(thread_id: str):
     path = settings.run_dir(thread_id) / "staged_row.json"
     if not path.exists():
         raise HTTPException(404, "nothing staged for this run yet")
+    await _require_acknowledged(thread_id)
     return JSONResponse(
         flatten_staged_row(json.loads(path.read_text(encoding="utf-8")))
     )
@@ -722,13 +860,13 @@ async def export_page(request: Request, thread_id: str):
             thread_id=thread_id,
         )
 
-    row = flatten_staged_row(json.loads(path.read_text(encoding="utf-8")))
-    first_doc = None
     try:
-        state = await load_state(thread_id)
-        first_doc = _first_doc_id(state)
+        state = await _require_acknowledged(thread_id)
     except HTTPException:
-        pass
+        return RedirectResponse(f"/runs/{thread_id}", status_code=303)
+
+    row = flatten_staged_row(json.loads(path.read_text(encoding="utf-8")))
+    first_doc = _first_doc_id(state)
 
     return render(
         request,
@@ -742,6 +880,7 @@ async def export_page(request: Request, thread_id: str):
                 path.stat().st_mtime, tz=dt.timezone.utc
             ).isoformat(timespec="seconds"),
             "first_doc_id": first_doc,
+            "all_acknowledged": True,
         },
         nav="export",
         thread_id=thread_id,
@@ -755,6 +894,7 @@ async def export_csv(thread_id: str):
     path = settings.run_dir(thread_id) / "staged_row.json"
     if not path.exists():
         raise HTTPException(404, "nothing staged for this run yet")
+    await _require_acknowledged(thread_id)
     row = flatten_staged_row(json.loads(path.read_text(encoding="utf-8")))
     # Prefer SharePoint column order; drop internal bookkeeping from CSV.
     preferred = [

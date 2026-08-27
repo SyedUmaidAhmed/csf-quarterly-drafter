@@ -306,7 +306,10 @@ class NarrativeSet(BaseModel):
     support_needed: NarrativeField
     support_from: list[str] = Field(
         default_factory=list,
-        description=f"Zero or more of: {', '.join(vocab.SUPPORT_FROM)}",
+        description=(
+            f"Zero or more of: {', '.join(vocab.SUPPORT_FROM)}. "
+            "Use Other when no specific function fits; do not leave empty."
+        ),
     )
 
     @model_validator(mode="before")

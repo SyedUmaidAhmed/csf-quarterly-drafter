@@ -54,8 +54,8 @@ invent a plausible-sounding ask. An empty field the director fills in is
 correct; a fabricated one is not.
 
 **support_from** — zero or more of: ILT, BDU, Finance, HR, IDDT,
-Communications, Other. Only where the evidence points at a specific function.
-Empty is a valid answer.
+Communications, Other. Name the function when the evidence points at one.
+When no specific function fits, return `["Other"]` — never leave the list empty.
 
 ## Write for one fast reading
 
@@ -83,8 +83,8 @@ director with its evidence, and it will be sent back:
       "needs_director_input": false
     }
 
-`support_from` is a list of strings, even when it holds one value, and `[]`
-when the evidence points at no particular function.
+`support_from` is a list of strings, even when it holds one value, and
+`["Other"]` when the evidence points at no particular function.
 
 Cite only claim ids that appear above. Write in the register of the previous
 quarter's update: plain, declarative, no marketing.

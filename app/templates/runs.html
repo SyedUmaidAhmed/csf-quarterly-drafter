@@ -34,30 +34,44 @@
 
   <div class="runs-cards">
     {% for run in runs %}
-      <a class="run-card" href="/runs/{{ run.thread_id }}">
-        <div class="run-card-top">
-          <span class="mono-id">{{ run.thread_id }}</span>
-          {% if run.status == "running" %}
-            <span class="pill pill-status run">running</span>
-          {% elif run.status == "failed" %}
-            <span class="pill pill-status fail">failed</span>
-          {% elif run.status == "staged" %}
-            <span class="pill pill-status ok">approved</span>
-          {% else %}
-            <span class="pill pill-status review">review</span>
-          {% endif %}
-        </div>
-        <div class="run-card-meta">
-          <span>{{ run.objective_id or "—" }}</span>
-          <span class="mono">{{ run.quarter or "—" }}</span>
-          {% if run.traffic_light %}
-            <span class="badge tl-{{ run.traffic_light }}">{{ run.traffic_light }}</span>
-            {% if run.progress_percent is not none %}
-              <span class="mono">{{ run.progress_percent }}%</span>
+      <div class="run-card-row">
+        <a class="run-card" href="/runs/{{ run.thread_id }}">
+          <div class="run-card-top">
+            <span class="mono-id">{{ run.thread_id }}</span>
+            {% if run.status == "running" %}
+              <span class="pill pill-status run">running</span>
+            {% elif run.status == "failed" %}
+              <span class="pill pill-status fail">failed</span>
+            {% elif run.status == "staged" %}
+              <span class="pill pill-status ok">approved</span>
+            {% else %}
+              <span class="pill pill-status review">review</span>
             {% endif %}
-          {% endif %}
-        </div>
-      </a>
+          </div>
+          <div class="run-card-meta">
+            <span>{{ run.objective_id or "—" }}</span>
+            <span class="mono">{{ run.quarter or "—" }}</span>
+            {% if run.traffic_light %}
+              <span class="badge tl-{{ run.traffic_light }}">{{ run.traffic_light }}</span>
+              {% if run.progress_percent is not none %}
+                <span class="mono">{{ run.progress_percent }}%</span>
+              {% endif %}
+            {% endif %}
+          </div>
+        </a>
+        <form
+          class="run-delete"
+          method="post"
+          action="/runs/{{ run.thread_id }}/delete"
+          onsubmit="return confirm('Delete draft {{ run.thread_id }}? Evidence files are kept.')"
+        >
+          <button type="submit" class="btn-icon-danger" aria-label="Delete run {{ run.thread_id }}" title="Delete run">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path fill="currentColor" d="M6 1.5h4a.5.5 0 0 1 .5.5v1h3a.5.5 0 0 1 0 1h-1v9a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 4 13V4H3a.5.5 0 0 1 0-1h3V2a.5.5 0 0 1 .5-.5zm1 .5v1h2V2H7zM5 4v9a.5.5 0 0 0 .5.5h5a.5.5 0 0 0 .5-.5V4H5zm2 2a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-1 0v-5A.5.5 0 0 1 7 6zm3 0a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-1 0v-5A.5.5 0 0 1 10 6z"/>
+            </svg>
+          </button>
+        </form>
+      </div>
     {% endfor %}
   </div>
 
@@ -70,6 +84,7 @@
           <th>Quarter</th>
           <th>Status</th>
           <th>Traffic light</th>
+          <th class="run-actions-col"><span class="visually-hidden">Actions</span></th>
         </tr>
       </thead>
       <tbody>
@@ -106,6 +121,20 @@
               {% else %}
                 —
               {% endif %}
+            </td>
+            <td class="run-actions-col">
+              <form
+                class="run-delete"
+                method="post"
+                action="/runs/{{ run.thread_id }}/delete"
+                onsubmit="return confirm('Delete draft {{ run.thread_id }}? Evidence files are kept.')"
+              >
+                <button type="submit" class="btn-icon-danger" aria-label="Delete run {{ run.thread_id }}" title="Delete run">
+                  <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <path fill="currentColor" d="M6 1.5h4a.5.5 0 0 1 .5.5v1h3a.5.5 0 0 1 0 1h-1v9a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 4 13V4H3a.5.5 0 0 1 0-1h3V2a.5.5 0 0 1 .5-.5zm1 .5v1h2V2H7zM5 4v9a.5.5 0 0 0 .5.5h5a.5.5 0 0 0 .5-.5V4H5zm2 2a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-1 0v-5A.5.5 0 0 1 7 6zm3 0a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-1 0v-5A.5.5 0 0 1 10 6z"/>
+                  </svg>
+                </button>
+              </form>
             </td>
           </tr>
         {% endfor %}

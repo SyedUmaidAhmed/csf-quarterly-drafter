@@ -148,33 +148,6 @@
       </section>
     {% endif %}
 
-    <div class="footer-bar">
-      {% if staged_path %}
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--s4);flex-wrap:wrap">
-          <span class="ack-done">
-            ✓ Approved for export · Source recorded as <b>{{ row.Source }}</b>
-          </span>
-          <a class="btn btn-primary" href="/runs/{{ thread_id }}/export">Open export</a>
-        </div>
-      {% else %}
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--s4);flex-wrap:wrap">
-          <p class="small muted" style="margin:0;max-width:42ch">
-            Approving writes the row to a file for you to submit yourself. It does
-            not write to SharePoint.
-          </p>
-          <button type="button" class="btn btn-primary" data-open-approve>
-            Approve and export
-          </button>
-        </div>
-        <form id="approve-form" method="post" action="/runs/{{ thread_id }}/approve"
-              data-busy="Approving…" hidden></form>
-      {% endif %}
-      <p class="fine" style="margin-top:0.7rem">
-        Run <code>{{ thread_id }}</code> ·
-        <a href="/runs/{{ thread_id }}/state.json">state as JSON</a> ·
-        <a href="/runs/{{ thread_id }}/audit">audit trail</a>
-      </p>
-    </div>
   </div>
 
   <aside class="rail card card-flush" aria-label="Evidence">
@@ -194,6 +167,99 @@
     </div>
   </aside>
 
+</div>
+
+    <div class="footer-bar" id="approve-footer" data-ack-total="{{ fields|length }}">
+      {% if staged_path %}
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--s4);flex-wrap:wrap">
+          <div>
+            <span class="ack-done">
+              ✓ Approved for export · Source recorded as <b>{{ row.Source }}</b>
+            </span>
+            <p
+              class="small"
+              id="ack-gate-hint"
+              style="margin:0.35rem 0 0;color:var(--color-text-muted);max-width:42ch"
+              {% if all_acknowledged %}hidden{% endif %}
+            >
+              Acknowledge every field above before export unlocks
+              (<span id="ack-gate-count">{{ acknowledged_count }}</span>/{{ fields|length }}).
+            </p>
+          </div>
+          <div class="footer-actions">
+            <form
+              method="post"
+              action="/runs/{{ thread_id }}/acknowledge-all"
+              id="ack-all-form"
+              data-busy="Updating…"
+            >
+              <button
+                type="submit"
+                class="btn btn-ack{% if all_acknowledged %} btn-ack-done{% endif %}"
+                data-ack-all
+                title="{% if all_acknowledged %}Click again to clear all acknowledgements{% else %}Acknowledge every field{% endif %}"
+              >
+                {% if all_acknowledged %}✓ All acknowledged{% else %}Acknowledge all{% endif %}
+              </button>
+            </form>
+            <a
+              class="btn btn-primary"
+              href="/runs/{{ thread_id }}/export"
+              data-open-export
+              {% if not all_acknowledged %}aria-disabled="true" tabindex="-1"{% endif %}
+            >Open export</a>
+          </div>
+        </div>
+      {% else %}
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--s4);flex-wrap:wrap">
+          <div>
+            <p class="small muted" style="margin:0;max-width:42ch">
+              Approving writes the row to a file for you to submit yourself. It does
+              not write to SharePoint.
+            </p>
+            <p
+              class="small"
+              id="ack-gate-hint"
+              style="margin:0.35rem 0 0;color:var(--color-text-muted);max-width:42ch"
+              {% if all_acknowledged %}hidden{% endif %}
+            >
+              Acknowledge every field above before export unlocks
+              (<span id="ack-gate-count">{{ acknowledged_count }}</span>/{{ fields|length }}).
+            </p>
+          </div>
+          <div class="footer-actions">
+            <form
+              method="post"
+              action="/runs/{{ thread_id }}/acknowledge-all"
+              data-busy="Updating…"
+            >
+              <button
+                type="submit"
+                class="btn btn-ack{% if all_acknowledged %} btn-ack-done{% endif %}"
+                data-ack-all
+                title="{% if all_acknowledged %}Click again to clear all acknowledgements{% else %}Acknowledge every field{% endif %}"
+              >
+                {% if all_acknowledged %}✓ All acknowledged{% else %}Acknowledge all{% endif %}
+              </button>
+            </form>
+            <button
+              type="button"
+              class="btn btn-primary"
+              data-open-approve
+              {% if not all_acknowledged %}disabled aria-disabled="true"{% endif %}
+            >
+              Approve and export
+            </button>
+          </div>
+        </div>
+        <form id="approve-form" method="post" action="/runs/{{ thread_id }}/approve"
+              data-busy="Approving…" hidden></form>
+      {% endif %}
+  <p class="fine" style="margin-top:0.7rem">
+    Run <code>{{ thread_id }}</code> ·
+    <a href="/runs/{{ thread_id }}/state.json">state as JSON</a> ·
+    <a href="/runs/{{ thread_id }}/audit">audit trail</a>
+  </p>
 </div>
 
 <div class="overlay" id="approve-dialog" aria-hidden="true">
