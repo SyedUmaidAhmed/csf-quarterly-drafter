@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Editing {{ filename }}{% endblock %}
+
+{% block content %}
+<p class="crumb"><a href="/runs/new">← back to new run</a></p>
+
+<div>
+  <span class="eyebrow">Evidence</span>
+  <h1 class="page-title">{{ filename }}</h1>
+  <p class="deck">
+    Plain markdown. The first heading becomes the title, and the date is read
+    from the document when the draft runs.
+  </p>
+</div>
+
+{% if error %}<div class="notice notice-flame" style="margin-top:1.1rem">{{ error }}</div>{% endif %}
+
+<section class="card mt-head card-pad">
+  <form method="post" action="/evidence/{{ filename }}/edit" class="field-stack"
+        style="max-width:none;margin-top:0">
+    <textarea name="text" rows="22" class="source-editor" spellcheck="false"
+              aria-label="Document source">{{ text }}</textarea>
+    <div class="field-row">
+      <button type="submit" class="btn btn-primary">Save</button>
+      <a class="btn btn-quiet" href="/runs/new">Cancel</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

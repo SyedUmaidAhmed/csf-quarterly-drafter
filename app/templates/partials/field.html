@@ -1,0 +1,92 @@
+{% from "partials/macros.html" import cite_chip %}
+{% set proposal = row.proposals()[field_name] %}
+
+<article class="proposal" id="field-{{ field_name }}">
+
+  <div class="proposal-head">
+    <h3 class="proposal-name">{{ field_name.replace("_", " ") }}</h3>
+    {% if proposal.edited_by_director %}
+      <span class="pill pill-overridden">you changed this</span>
+    {% elif proposal.needs_director_input %}
+      <span class="pill pill-status review">needs your input</span>
+    {% else %}
+      <span class="pill pill-derived" title="{{ proposal.confidence_reason }}">
+        {{ proposal.confidence }} confidence
+      </span>
+    {% endif %}
+  </div>
+
+  <form hx-post="/runs/{{ thread_id }}/field/{{ field_name }}"
+        hx-target="#field-{{ field_name }}"
+        method="post" action="/runs/{{ thread_id }}/field/{{ field_name }}">
+
+    {% if field_name == "Traffic_Light" %}
+      <div class="choices">
+        {% for value, anchor in traffic_lights.items() %}
+          <label class="choice{% if proposal.value == value %} choice-chosen{% endif %}">
+            <input type="radio" name="Traffic_Light" value="{{ value }}"
+                   {% if proposal.value == value %}checked{% endif %}>
+            <span class="badge tl-{{ value }}">{{ value }}</span>
+            <span class="choice-anchor">{{ anchor }}</span>
+          </label>
+        {% endfor %}
+      </div>
+
+    {% elif field_name == "Progress_Percent" %}
+      <div class="percent">
+        <input type="number" name="Progress_Percent" min="0" max="100"
+               aria-label="Progress percent"
+               value="{{ proposal.value if proposal.value is not none else '' }}">
+        <span class="unit">% of the success measure</span>
+      </div>
+
+    {% elif field_name == "Support_From" %}
+      <div class="choice-row">
+        {% for option in support_from_options %}
+          <label class="choice-inline">
+            <input type="checkbox" name="Support_From" value="{{ option }}"
+                   {% if proposal.value and option in proposal.value %}checked{% endif %}>
+            {{ option }}
+          </label>
+        {% endfor %}
+      </div>
+
+    {% else %}
+      <textarea name="{{ field_name }}" rows="3" class="narrative-ta"
+                aria-label="{{ field_name.replace('_', ' ') }}"
+                placeholder="{% if proposal.needs_director_input %}The evidence did not support a value. Left empty deliberately.{% endif %}"
+      >{{ proposal.value or "" }}</textarea>
+      {% set length = (proposal.value or "") | length %}
+      {% if length > max_chars %}
+        <span class="count danger">{{ length }} characters — the SharePoint column holds {{ max_chars }}</span>
+      {% endif %}
+    {% endif %}
+
+    <button type="submit" class="btn btn-sm btn-quiet" style="margin-top:0.6rem">Save</button>
+  </form>
+
+  {% if proposal.rationale %}
+    <p class="rationale">{{ proposal.rationale }}</p>
+  {% endif %}
+
+  {% if proposal.reasoning %}
+    <details>
+      <summary>Why, in full</summary>
+      <p class="reasoning-body">{{ proposal.reasoning }}</p>
+    </details>
+  {% endif %}
+
+  {% if proposal.claim_ids %}
+    <p class="cites">
+      <span class="cites-label">Evidence</span>
+      {% for claim_id in proposal.claim_ids %}
+        {{ cite_chip(claim_id, claims, thread_id) }}
+      {% endfor %}
+    </p>
+  {% endif %}
+
+  {% if proposal.confidence_reason and not proposal.edited_by_director
+        and not proposal.needs_director_input %}
+    <p class="fine" style="margin-top:0.45rem">{{ proposal.confidence_reason }}</p>
+  {% endif %}
+</article>

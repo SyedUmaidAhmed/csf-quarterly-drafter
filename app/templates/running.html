@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Drafting — {{ thread_id }}{% endblock %}
+
+{% block head %}<noscript><meta http-equiv="refresh" content="5"></noscript>{% endblock %}
+
+{% block content %}
+<div>
+  <span class="eyebrow">Working</span>
+  <h1 class="page-title">Reading the evidence.</h1>
+  <p class="deck">
+    Each document is read on its own first. A reader shown all of them at once
+    smooths over the places they disagree, and those are the parts worth
+    keeping — so reconciliation is a separate step with its rules written down.
+  </p>
+</div>
+
+<section class="card mt-head">
+  <ol class="progress stage-list" id="progress" data-thread="{{ thread_id }}">
+    {% for event in events %}
+      <li class="progress-step stage-row done">
+        <span class="tick stage-ico" aria-hidden="true">✓</span>
+        <span class="progress-label stage-name">{{ event.label }}</span>
+        {% if event.detail %}<span class="progress-detail stage-detail">{{ event.detail }}</span>{% endif %}
+      </li>
+    {% endfor %}
+    <li class="progress-step progress-working stage-row active" id="progress-working">
+      <span class="spinner stage-ico" aria-hidden="true"></span>
+      <span class="progress-label stage-name">Working…</span>
+    </li>
+  </ol>
+  <p class="fine" style="padding:0 var(--s5) var(--s5)">
+    Nothing is submitted at any point. This page updates itself, and leaving it
+    does not stop the run.
+  </p>
+</section>
+{% endblock %}

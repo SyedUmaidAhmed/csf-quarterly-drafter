@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}New run — Quarterly update drafter{% endblock %}
+
+{% block content %}
+
+{% if message %}<div class="notice notice-flame">{{ message }}</div>{% endif %}
+{% if error %}<div class="banner banner-danger"><strong>Not done.</strong> {{ error }}</div>{% endif %}
+
+<div>
+  <span class="eyebrow">Critical Success Factor framework</span>
+  <h1 class="page-title">Draft a quarterly update from the director's own material.</h1>
+  <p class="deck">
+    Reads each document separately, reconciles what they disagree about, and
+    proposes a structured row. The director checks it, changes what they
+    disagree with, and submits it themselves.
+  </p>
+</div>
+
+<div class="steps mt-head">
+
+  <section class="step {% if has_key %}step-done{% endif %}" id="key">
+    <div class="step-head">
+      <span class="step-number" aria-hidden="true">1</span>
+      <h2 class="title">Connect a model</h2>
+      {% if has_key %}
+        <span class="badge badge-flame">{{ masked_key }} &middot; {{ key_source }}</span>
+      {% else %}
+        <span class="badge">needed</span>
+      {% endif %}
+    </div>
+
+    <div class="step-body">
+      <form method="post" action="/settings/key" autocomplete="off" class="field-row">
+        <input type="password" name="api_key" class="input-key" placeholder="sk-ant-..."
+               autocomplete="off" spellcheck="false" aria-label="Anthropic API key">
+        <button type="submit" class="btn btn-sm btn-quiet">
+          {% if has_key %}Replace{% else %}Use this key{% endif %}
+        </button>
+        {% if key_source == "entered here" %}
+          <button type="submit" class="btn-bare" formaction="/settings/key/clear">Clear</button>
+        {% endif %}
+      </form>
+      <p class="fine" style="margin-top:0.7rem">
+        Held in this server process only. Not written to disk, not logged, gone
+        when the server stops.
+      </p>
+    </div>
+  </section>
+
+  <section class="step step-done">
+    <div class="step-head">
+      <span class="step-number" aria-hidden="true">2</span>
+      <h2 class="title">What is being reported against</h2>
+      <span class="badge">{{ objective.get("Objective_ID", "set") }}</span>
+    </div>
+
+    <div class="step-body">
+      <p class="subhead">{{ objective.get("Title", "Untitled objective") }}</p>
+
+      <div class="measure">
+        <span class="measure-label">Success measure</span>
+        <p>{{ objective.get("Success_Measure", "not set") }}</p>
+      </div>
+
+      {% if prior_update %}
+        <p class="body">
+          Last submitted:
+          <span class="mono">{{ prior_update.get("Traffic_Light", "—") }}</span>
+          at <span class="mono num">{{ prior_update.get("Progress_Percent", "—") }}%</span>
+          in {{ prior_update.get("Quarter", "the prior quarter") }}. Shown for
+          contrast — the new draft is made from the evidence, not carried forward.
+        </p>
+      {% endif %}
+
+      <details>
+        <summary>Edit the objective</summary>
+        <form method="post" action="/objective" class="field-stack">
+          <label>Objective ID
+            <input type="text" name="Objective_ID" value="{{ objective.get('Objective_ID', '') }}">
+          </label>
+          <label>Title
+            <textarea name="Title" rows="2">{{ objective.get("Title", "") }}</textarea>
+          </label>
+          <label>Success measure
+            <textarea name="Success_Measure" rows="3">{{ objective.get("Success_Measure", "") }}</textarea>
+            <span class="hint">The traffic light is assessed against this, not against how much work was done.</span>
+          </label>
+          <label>Target completion
+            <input type="text" name="Target_Completion" value="{{ objective.get('Target_Completion', '') }}">
+          </label>
+          <button type="submit" class="btn btn-sm btn-quiet">Save objective</button>
+        </form>
+      </details>
+    </div>
+  </section>
+
+  <section class="step {% if docs %}step-done{% endif %}">
+    <div class="step-head">
+      <span class="step-number" aria-hidden="true">3</span>
+      <h2 class="title">The evidence</h2>
+      <span class="badge {% if docs %}badge-flame{% endif %}">
+        {{ docs | length }} document{{ "" if docs | length == 1 else "s" }}
+      </span>
+    </div>
+
+    <div class="step-body">
+      {% if docs %}
+        <ul class="rows">
+          {% for doc in docs %}
+            <li class="row">
+              <span class="glyph" aria-hidden="true">{{ doc.doc_id }}</span>
+              <span class="row-main">
+                <span class="row-title">{{ doc.title }}</span>
+                <span class="row-meta">
+                  {{ doc.source_type }} &middot; {{ doc.date_label }} &middot;
+                  {{ doc.blocks | length }} blocks
+                </span>
+              </span>
+              <span class="row-actions">
+                <a class="link-btn" href="/evidence/{{ doc.filename }}/edit">edit</a>
+                <form method="post" action="/evidence/{{ doc.filename }}/delete"
+                      onsubmit="return confirm('Remove {{ doc.filename }}?')">
+                  <button type="submit" class="btn-bare">remove</button>
+                </form>
+              </span>
+            </li>
+          {% endfor %}
+        </ul>
+        <p class="fine" style="margin-top:0.9rem">
+          Oldest first. Later evidence supersedes earlier, so the dates decide
+          how contradictions are resolved; undated documents sort last.
+        </p>
+      {% else %}
+        <p class="empty-copy">
+          Nothing to read yet. Add an email, a chat extract, a meeting note —
+          whatever the director would have.
+        </p>
+      {% endif %}
+
+      <details {% if not docs %}open{% endif %}>
+        <summary>Add evidence</summary>
+        <form method="post" action="/evidence/add" enctype="multipart/form-data"
+              class="field-stack">
+          <label>Title
+            <input type="text" name="title" placeholder="Email — 22 July 2026">
+          </label>
+          <label>Date <span class="optional">optional</span>
+            <input type="text" name="date" placeholder="22 July 2026">
+            <span class="hint">Only needed if the title has no date in it.</span>
+          </label>
+          <label>Paste the document
+            <textarea name="body" rows="8"
+                      placeholder="An email, a chat exchange, a meeting note…"></textarea>
+          </label>
+          <label>…or upload files <span class="optional">optional</span>
+            <input type="file" name="files" multiple accept=".md,.markdown,.txt">
+          </label>
+          <button type="submit" class="btn btn-sm btn-quiet">Add to the evidence</button>
+        </form>
+      </details>
+
+      <p class="fine" style="margin-top:0.9rem">
+        Stored as plain markdown in <code>{{ data_dir }}/evidence</code>.
+        Dropping files in there directly works exactly the same.
+      </p>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-head">
+      <span class="step-number" aria-hidden="true">4</span>
+      <h2 class="title">Draft it</h2>
+    </div>
+
+    <div class="step-body">
+      <form method="post" action="/runs" class="field-row"
+            data-busy="Reading the evidence…">
+        <label for="quarter" class="muted" style="font-weight:400">Quarter</label>
+        <input type="text" id="quarter" name="quarter" value="{{ quarter }}"
+               style="width:6rem">
+        <button type="submit" class="btn btn-primary">Draft this quarter's update</button>
+      </form>
+
+      {% if not has_key %}
+        <p class="fine" style="margin-top:0.9rem;color:var(--color-warning)">
+          No model connected yet. <a href="#key">Add a key in step 1</a>.
+        </p>
+      {% elif not docs %}
+        <p class="fine" style="margin-top:0.9rem;color:var(--color-warning)">
+          No evidence to read. Add some in step 3.
+        </p>
+      {% endif %}
+
+      <p class="fine" style="margin-top:0.9rem">
+        Takes about a minute. Each document is read on its own first, then the
+        disagreements between them are reconciled. Nothing is submitted.
+      </p>
+    </div>
+  </section>
+
+</div>
+{% endblock %}

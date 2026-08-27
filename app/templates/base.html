@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Quarterly update drafter{% endblock %}</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23275e6e'/%3E%3Ccircle cx='16' cy='13' r='5' fill='none' stroke='%23fff' stroke-width='2.4'/%3E%3Cpath d='M9 24h14' stroke='%23fff' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/tokens.css?v=3">
+  <link rel="stylesheet" href="/static/app.css?v=3">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("csf-theme");
+        if (t === "dark") document.documentElement.classList.add("dark");
+        else if (t === "light") document.documentElement.classList.add("light");
+        else if (window.matchMedia("(prefers-color-scheme: dark)").matches)
+          document.documentElement.classList.add("dark");
+      } catch (e) {}
+    })();
+  </script>
+  <script src="/static/app.js?v=3" defer></script>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="app-header">
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 32 32">
+          <circle cx="16" cy="12" r="6" fill="none" stroke="currentColor" stroke-width="3"/>
+          <path d="M8 25h16" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span>
+        <span class="brand-name brand-name-full">Quarterly update drafter</span>
+        <span class="brand-name brand-name-short">CSF Drafter</span><br>
+        <span class="brand-sub">drafts only · the director submits</span>
+      </span>
+    </a>
+    <span class="header-spacer"></span>
+    <button type="button" class="hbtn" id="theme-toggle" aria-label="Toggle theme" aria-pressed="false">Dark</button>
+    <a class="hbtn" href="/runs/new#key" title="API key">
+      <span class="key-dot{% if has_key %} ok{% endif %}" aria-hidden="true"></span>
+      <span class="key-label">{% if has_key %}Key ready{% else %}Add API key{% endif %}</span>
+    </a>
+  </header>
+
+  <div class="demo-strip">
+    Server workspace · <b>no authentication</b> — AI never writes to the system of
+    record · the terminal action is <b>Approve and export</b>
+  </div>
+
+  <div class="app-body">
+    <nav class="sidebar" aria-label="Sections">
+      <div class="side-group">
+        <div class="side-label">Workspace</div>
+        <a class="side-link{% if nav == 'runs' %} active{% endif %}" href="/">
+          Runs{% if run_count is defined and run_count %}<span class="mono">{{ run_count }}</span>{% endif %}
+        </a>
+        <a class="side-link{% if nav == 'new' %} active{% endif %}" href="/runs/new">New run</a>
+      </div>
+
+      {% if thread_id %}
+      <div class="side-group">
+        <div class="side-label">This run</div>
+        <div class="side-meta mono" style="margin-bottom:var(--s2)">{{ thread_id }}</div>
+        <a class="side-link{% if nav == 'review' %} active{% endif %}"
+           href="/runs/{{ thread_id }}">Review</a>
+        {% if first_doc_id %}
+        <a class="side-link{% if nav == 'evidence' %} active{% endif %}"
+           href="/runs/{{ thread_id }}/evidence/{{ first_doc_id }}">Evidence</a>
+        {% endif %}
+        <a class="side-link{% if nav == 'audit' %} active{% endif %}"
+           href="/runs/{{ thread_id }}/audit">Audit trail</a>
+        {% if staged_path %}
+        <a class="side-link{% if nav == 'export' %} active{% endif %}"
+           href="/runs/{{ thread_id }}/export">Export</a>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <div class="side-group">
+        <div class="side-meta" style="white-space:normal;line-height:16px">
+          AI never writes to the system of record. Approve and export stages a
+          row for the director to submit themselves.
+        </div>
+      </div>
+    </nav>
+
+    <main id="main" class="main{% if nav == 'review' %} has-sticky-actions{% endif %}">
+      <nav class="mobile-nav" aria-label="Mobile sections">
+        <a class="side-link{% if nav == 'runs' %} active{% endif %}" href="/">Runs</a>
+        <a class="side-link{% if nav == 'new' %} active{% endif %}" href="/runs/new">New run</a>
+        {% if thread_id %}
+        <a class="side-link{% if nav == 'review' %} active{% endif %}" href="/runs/{{ thread_id }}">Review</a>
+        {% if first_doc_id %}
+        <a class="side-link{% if nav == 'evidence' %} active{% endif %}"
+           href="/runs/{{ thread_id }}/evidence/{{ first_doc_id }}">Evidence</a>
+        {% endif %}
+        <a class="side-link{% if nav == 'audit' %} active{% endif %}"
+           href="/runs/{{ thread_id }}/audit">Audit</a>
+        {% if staged_path %}
+        <a class="side-link{% if nav == 'export' %} active{% endif %}"
+           href="/runs/{{ thread_id }}/export">Export</a>
+        {% endif %}
+        {% endif %}
+      </nav>
+      <div class="content">
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+  </div>
+
+  <footer class="app-footer">
+    <p>
+      AI services never write to the system of record. This workflow reads
+      evidence and stages a row for a director to submit. It does not submit
+      one, and it has no code path that could.
+    </p>
+  </footer>
+</body>
+</html>

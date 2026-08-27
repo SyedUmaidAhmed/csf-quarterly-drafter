@@ -1,0 +1,30 @@
+{# The evidence rail's contents. Also the body of the full-page fallback. #}
+
+{% if cited_claims %}
+  <div style="margin-bottom:1.1rem">
+    {% for claim in cited_claims %}
+      <p class="fine" style="margin-bottom:0.45rem">
+        <span class="chip cite" aria-hidden="true">{{ claim.claim_id }}</span>
+        {{ claim.text }}
+      </p>
+      {% for citation in claim.citations %}
+        {% if citation.doc_id == doc.doc_id and citation.cited_text %}
+          <blockquote class="quoted">{{ citation.cited_text }}</blockquote>
+        {% endif %}
+      {% endfor %}
+    {% endfor %}
+  </div>
+{% endif %}
+
+<ol class="blocks">
+  {% for block in doc.blocks %}
+    <li class="block{% if block.index in highlighted %} block-cited{% endif %}"
+        {% if block.index in highlighted %}data-cited="true"{% endif %}>
+      <span class="block-index" aria-hidden="true">{{ block.index }}</span>
+      <div>
+        <span class="block-kind">{{ block.kind.replace("_", " ") }}</span>
+        <p class="block-text">{{ block.text }}</p>
+      </div>
+    </li>
+  {% endfor %}
+</ol>

@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import cite_chip %}
+{% block title %}Review draft — {{ row.Objective_ID }} {{ row.Quarter }}{% endblock %}
+
+{% block content %}
+
+{% if staged_path %}
+  <div class="notice notice-flame">
+    <strong>Approved for export.</strong> This row is waiting for you to submit it
+    in the system of record. It has not been submitted for you.
+    <a href="/runs/{{ thread_id }}/export">Open export</a>
+  </div>
+{% else %}
+  <div class="notice notice-quiet">
+    <strong>Nothing here has been submitted.</strong> This is a proposal drawn
+    from your own material. Change anything you disagree with, then approve and
+    export.
+  </div>
+{% endif %}
+
+<div>
+  <span class="eyebrow">{{ row.Objective_ID }} · {{ row.Quarter }}</span>
+  <h1 class="page-title">{{ objective.get("Title", "Quarterly update") }}</h1>
+  <div class="measure">
+    <span class="measure-label">Success measure</span>
+    <p>{{ objective.get("Success_Measure", "not stated") }}</p>
+  </div>
+</div>
+
+<div class="review mt-head">
+
+  <div class="stack">
+
+    {% if prior_update %}
+      <section class="card card-pad">
+        <h2 class="section-h">What changed since {{ prior_update.get("Quarter", "last quarter") }}</h2>
+        <div class="change">
+          <div class="change-side">
+            <span class="change-label">Then</span>
+            <span class="change-value">{{ prior_update.get("Traffic_Light", "—") }}</span>
+            <span class="change-value num">{{ prior_update.get("Progress_Percent", "—") }}%</span>
+          </div>
+          <span class="change-arrow" aria-hidden="true">→</span>
+          <div class="change-side change-now">
+            <span class="change-label">Proposed now</span>
+            <span class="change-value">{{ row.Traffic_Light.value or "—" }}</span>
+            <span class="change-value num">{% if row.Progress_Percent.value is not none %}{{ row.Progress_Percent.value }}%{% else %}—{% endif %}</span>
+          </div>
+        </div>
+        {% if prior_update.get("Key_Success") %}
+          <p class="body">Then said: {{ prior_update["Key_Success"] }}</p>
+        {% endif %}
+      </section>
+    {% endif %}
+
+    {% if conflicts %}
+      <div class="attn-group open">
+        <button type="button" class="attn-head" data-attn-toggle aria-expanded="true">
+          The evidence disagrees with itself
+          <span class="attn-count">{{ conflicts | length }}</span>
+          <span class="attn-caret" aria-hidden="true">›</span>
+        </button>
+        <div class="attn-body">
+          {% for conflict in conflicts %}
+            <div class="attn-item">
+              <div class="attn-title">{{ conflict.topic }}</div>
+              <p class="small">{{ conflict.note }}</p>
+              <p class="provenance">
+                {{ cite_chip(conflict.winning_claim_id, claims, thread_id, "stands") }}
+                {% for superseded in conflict.superseded_claim_ids %}
+                  {{ cite_chip(superseded, claims, thread_id, "superseded", True) }}
+                {% endfor %}
+                <span class="rule">{{ conflict.rule_applied.replace("_", " ") }}</span>
+              </p>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    {% if gaps %}
+      <div class="attn-group open">
+        <button type="button" class="attn-head" data-attn-toggle aria-expanded="true">
+          The evidence never settles these
+          <span class="attn-count">{{ gaps | length }}</span>
+          <span class="attn-caret" aria-hidden="true">›</span>
+        </button>
+        <div class="attn-body">
+          {% for gap in gaps %}
+            <div class="attn-item">
+              <div class="attn-title">{{ gap.topic }}</div>
+              <p class="small">{{ gap.note }}</p>
+              {% if gap.bears_on %}
+                <p class="fine" style="margin-top:0.45rem">
+                  Leaves unverified: {{ gap.bears_on }}
+                </p>
+              {% endif %}
+              <p class="provenance">
+                {% for claim_id in gap.raised_by_claim_ids %}
+                  {{ cite_chip(claim_id, claims, thread_id) }}
+                {% endfor %}
+                <span class="rule">nothing later addresses this</span>
+              </p>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    {% if errors %}
+      <section class="card card-pad">
+        <h2 class="section-h">The draft could not be made valid</h2>
+        <p class="body">These need attention before the row is usable.</p>
+        <ul class="rows">
+          {% for issue in errors %}
+            <li class="row">
+              <span class="badge">{{ issue.field.replace("_", " ") }}</span>
+              <span class="row-main"><span class="fine">{{ issue.message }}</span></span>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+
+    <section class="card card-flush">
+      <div class="step-head">
+        <h2 class="title">Proposed row</h2>
+        <span class="badge">{{ row.Source }}</span>
+      </div>
+      <div class="step-body">
+        <p class="fine" style="margin-bottom:1.1rem">
+          <code>Source</code> is <code>{{ row.Source }}</code> because this row
+          came from the drafting layer. <code>Trend vs prior quarter</code> is
+          not here: it is calculated in Power&nbsp;BI, not submitted.
+        </p>
+
+        {% for name, proposal in fields %}
+          {% set field_name = name %}
+          {% include "partials/field.html" %}
+        {% endfor %}
+      </div>
+    </section>
+
+    {% if reconciled_position %}
+      <section class="card card-pad">
+        <h2 class="section-h">What the evidence supports</h2>
+        <p class="body" style="max-width:none">{{ reconciled_position }}</p>
+      </section>
+    {% endif %}
+
+    <div class="footer-bar">
+      {% if staged_path %}
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--s4);flex-wrap:wrap">
+          <span class="ack-done">
+            ✓ Approved for export · Source recorded as <b>{{ row.Source }}</b>
+          </span>
+          <a class="btn btn-primary" href="/runs/{{ thread_id }}/export">Open export</a>
+        </div>
+      {% else %}
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--s4);flex-wrap:wrap">
+          <p class="small muted" style="margin:0;max-width:42ch">
+            Approving writes the row to a file for you to submit yourself. It does
+            not write to SharePoint.
+          </p>
+          <button type="button" class="btn btn-primary" data-open-approve>
+            Approve and export
+          </button>
+        </div>
+        <form id="approve-form" method="post" action="/runs/{{ thread_id }}/approve"
+              data-busy="Approving…" hidden></form>
+      {% endif %}
+      <p class="fine" style="margin-top:0.7rem">
+        Run <code>{{ thread_id }}</code> ·
+        <a href="/runs/{{ thread_id }}/state.json">state as JSON</a> ·
+        <a href="/runs/{{ thread_id }}/audit">audit trail</a>
+      </p>
+    </div>
+  </div>
+
+  <aside class="rail card card-flush" aria-label="Evidence">
+    <div class="rail-head">
+      <h2 class="title" id="rail-title">Evidence</h2>
+      <span class="rule" id="rail-meta"></span>
+    </div>
+    <div class="rail-body" id="rail-body">
+      <p class="fine">
+        Click any reference in the draft — <span class="chip cite">E1.1</span> —
+        and the source appears here with the cited lines marked.
+      </p>
+      <p class="fine" style="margin-top:0.7rem">
+        The marks come back from the API against the exact text it was sent, so
+        a citation cannot point at a sentence nobody wrote.
+      </p>
+    </div>
+  </aside>
+
+</div>
+
+<div class="overlay" id="approve-dialog" aria-hidden="true">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="approve-title">
+    <h3 id="approve-title">Approve and export?</h3>
+    <p class="small muted">
+      This stages the row for you to submit in the system of record. Nothing is
+      submitted automatically. Source stays <code>Substrate-Drafted</code>.
+    </p>
+    <div class="dialog-actions">
+      <button type="button" class="btn btn-quiet" data-close-approve>Cancel</button>
+      <button type="button" class="btn btn-primary" data-confirm-approve>Approve and export</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

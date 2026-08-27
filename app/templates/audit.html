@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Audit — {{ thread_id }}{% endblock %}
+
+{% block content %}
+<div>
+  <span class="eyebrow">{{ thread_id }}</span>
+  <h1 class="page-title">Audit trail</h1>
+  <p class="deck">
+    Pipeline stages from this server session and director corrections recorded
+    against the draft. No LLM token ledger in this build.
+  </p>
+</div>
+
+<div class="actions mt-head">
+  <a class="btn btn-sm" href="/runs/{{ thread_id }}/audit.md">Download as Markdown</a>
+  <a class="btn btn-sm btn-quiet" href="/runs/{{ thread_id }}">Back to review</a>
+</div>
+
+<section class="card card-pad mt-head">
+  <h2 class="section-h" style="margin-bottom:var(--s4)">Pipeline events</h2>
+  {% if events %}
+    <ul class="audit-list">
+      {% for event in events %}
+        <li class="audit-item">
+          <span class="audit-time">{{ event.get("stage", "") }}</span>
+          <strong>{{ event.get("label", event.get("stage")) }}</strong>
+          {% if event.get("detail") %}<span class="muted">{{ event.detail }}</span>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted small">
+      No live progress events in this process. Events are in-memory for the
+      current server session; restarting clears them. Corrections below still
+      persist with the run.
+    </p>
+  {% endif %}
+</section>
+
+<section class="card card-pad mt-head">
+  <h2 class="section-h" style="margin-bottom:var(--s4)">Director corrections</h2>
+  {% if corrections %}
+    <ul class="audit-list">
+      {% for c in corrections %}
+        <li class="audit-item">
+          <span class="audit-time">{% if c is mapping %}{{ c.get("timestamp", "") }}{% else %}{{ c.timestamp }}{% endif %}</span>
+          <strong>{% if c is mapping %}{{ c.get("field", "") }}{% else %}{{ c.field }}{% endif %}</strong>
+          <span class="small">
+            proposed <code>{% if c is mapping %}{{ c.get("proposed_value") }}{% else %}{{ c.proposed_value }}{% endif %}</code>
+            → director <code>{% if c is mapping %}{{ c.get("director_value") }}{% else %}{{ c.director_value }}{% endif %}</code>
+          </span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted small">No director edits recorded for this run yet.</p>
+  {% endif %}
+</section>
+
+{% if staged_path %}
+<section class="card card-pad mt-head">
+  <h2 class="section-h">Staging</h2>
+  <p class="body">
+    Row staged at <code>{{ staged_path }}</code>. Source remains
+    <code>Substrate-Drafted</code> — nothing was submitted.
+  </p>
+  <a class="btn btn-sm" href="/runs/{{ thread_id }}/export" style="margin-top:var(--s3)">Open export</a>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Runs — Quarterly update drafter{% endblock %}
+
+{% block content %}
+{% if not runs %}
+  <div class="card empty">
+    <div class="eyebrow">Quarterly update drafting assistant</div>
+    <h2>No runs yet</h2>
+    <p>
+      Point the tool at the director's evidence, connect a model, and draft a
+      structured CSF row. Nothing is submitted — approve and export stages a
+      file for the director to carry to the form.
+    </p>
+    <div class="actions" style="justify-content:center">
+      <a class="btn btn-primary" href="/runs/new">New run</a>
+    </div>
+    <p class="small muted" style="margin-top:var(--s4)">
+      Sample evidence already lives under <code>data/evidence</code> — open
+      New run to use it.
+    </p>
+  </div>
+{% else %}
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:var(--s4);margin-bottom:var(--s5);flex-wrap:wrap">
+    <div>
+      <span class="eyebrow">Workspace</span>
+      <h1 class="page-title">Runs</h1>
+      <p class="deck" style="margin-top:var(--s2)">
+        Drafts live on this server until you approve and export. Nothing is
+        submitted for you.
+      </p>
+    </div>
+    <a class="btn btn-primary" href="/runs/new">New run</a>
+  </div>
+
+  <div class="runs-cards">
+    {% for run in runs %}
+      <a class="run-card" href="/runs/{{ run.thread_id }}">
+        <div class="run-card-top">
+          <span class="mono-id">{{ run.thread_id }}</span>
+          {% if run.status == "running" %}
+            <span class="pill pill-status run">running</span>
+          {% elif run.status == "failed" %}
+            <span class="pill pill-status fail">failed</span>
+          {% elif run.status == "staged" %}
+            <span class="pill pill-status ok">approved</span>
+          {% else %}
+            <span class="pill pill-status review">review</span>
+          {% endif %}
+        </div>
+        <div class="run-card-meta">
+          <span>{{ run.objective_id or "—" }}</span>
+          <span class="mono">{{ run.quarter or "—" }}</span>
+          {% if run.traffic_light %}
+            <span class="badge tl-{{ run.traffic_light }}">{{ run.traffic_light }}</span>
+            {% if run.progress_percent is not none %}
+              <span class="mono">{{ run.progress_percent }}%</span>
+            {% endif %}
+          {% endif %}
+        </div>
+      </a>
+    {% endfor %}
+  </div>
+
+  <div class="card card-pad runs-table-wrap">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>Run</th>
+          <th>Objective</th>
+          <th>Quarter</th>
+          <th>Status</th>
+          <th>Traffic light</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for run in runs %}
+          <tr class="rowlink">
+            <td>
+              <a class="mono-id" href="/runs/{{ run.thread_id }}">{{ run.thread_id }}</a>
+            </td>
+            <td><a href="/runs/{{ run.thread_id }}">{{ run.objective_id or "—" }}</a></td>
+            <td class="mono">{{ run.quarter or "—" }}</td>
+            <td>
+              {% if run.status == "running" %}
+                <span class="pill pill-status run">running</span>
+              {% elif run.status == "failed" %}
+                <span class="pill pill-status fail">failed</span>
+              {% elif run.status == "staged" %}
+                <span class="pill pill-status ok">approved</span>
+              {% else %}
+                <span class="pill pill-status review">review</span>
+              {% endif %}
+            </td>
+            <td class="tl-cell">
+              {% if run.traffic_light %}
+                <span class="badge tl-{{ run.traffic_light }}">{{ run.traffic_light }}</span>
+                {% if run.progress_percent is not none %}
+                  <span class="mono muted"> · {{ run.progress_percent }}%</span>
+                {% endif %}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,18 @@
+{# A citation chip.
+
+   It is a real link to the full-page source view, so it works with no
+   JavaScript. With JavaScript, app.js intercepts it and loads the source into
+   the rail on the right instead — the director never leaves the draft. #}
+
+{% macro cite_chip(claim_id, claims, thread_id, label="", struck=False) %}
+  {%- set claim = claims.get(claim_id) -%}
+  {%- if claim -%}
+    <a class="chip cite{% if struck %} chip-superseded{% endif %}"
+       href="/runs/{{ thread_id }}/evidence/{{ claim.doc_id }}?claim={{ claim_id }}"
+       data-cite="{{ claim_id }}"
+       data-doc="{{ claim.doc_id }}"
+       title="{{ claim.text }}">{{ claim_id }}{% if label %} {{ label }}{% endif %}</a>
+  {%- else -%}
+    <span class="chip">{{ claim_id }}</span>
+  {%- endif -%}
+{% endmacro %}

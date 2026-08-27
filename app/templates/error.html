@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ message }}{% endblock %}
+
+{% block content %}
+<div>
+  <span class="eyebrow">Stopped</span>
+  <h1 class="page-title">{{ message }}</h1>
+  {% if detail %}<p class="deck">{{ detail }}</p>{% endif %}
+</div>
+
+<section class="card mt-head card-pad">
+  <p class="fine">
+    Nothing was submitted and nothing was staged. The full error is in the
+    server log.{% if thread_id %} This run was <code>{{ thread_id }}</code>.{% endif %}
+  </p>
+  <p class="fine" style="margin-top:0.7rem">
+    The data folder needs <code>objective.md</code>, an <code>evidence/</code>
+    folder of markdown, and optionally <code>prior_update.md</code>.
+  </p>
+  <div class="actions">
+    <a class="btn btn-quiet" href="/">Back to runs</a>
+    <a class="btn btn-primary" href="/runs/new">New run</a>
+  </div>
+</section>
+{% endblock %}

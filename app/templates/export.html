@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}{% if approved %}Export — {{ thread_id }}{% else %}Not approved yet{% endif %}{% endblock %}
+
+{% block content %}
+{% if not approved %}
+  <div class="card empty">
+    <h2>Not approved yet</h2>
+    <p>
+      Export unlocks after <b>Approve and export</b> on the review screen.
+      Nothing has been staged for this run.
+    </p>
+    <a class="btn btn-primary" href="/runs/{{ thread_id }}">Back to the review screen</a>
+  </div>
+{% else %}
+  <div>
+    <span class="eyebrow">Export</span>
+    <h1 class="page-title">Row approved</h1>
+    <p class="deck">
+      Staged {{ staged_at }}. Carry these files to the CSF form yourself —
+      nothing was submitted.
+    </p>
+  </div>
+
+  <div class="card card-pad mt-head stack">
+    <dl class="kv">
+      <dt>Objective</dt><dd class="mono">{{ row.get("Objective_ID", "—") }}</dd>
+      <dt>Quarter</dt><dd class="mono">{{ row.get("Quarter", "—") }}</dd>
+      <dt>Traffic light</dt>
+      <dd>
+        {% if row.get("Traffic_Light") %}
+          <span class="badge tl-{{ row.Traffic_Light }}">{{ row.Traffic_Light }}</span>
+        {% else %}—{% endif %}
+      </dd>
+      <dt>Progress</dt>
+      <dd class="mono">{% if row.get("Progress_Percent") is not none %}{{ row.Progress_Percent }}%{% else %}—{% endif %}</dd>
+      <dt>Key success</dt>
+      <dd class="serif">{% if row.get("Key_Success") %}{{ row.Key_Success }}{% else %}—{% endif %}</dd>
+      <dt>Key challenge</dt>
+      <dd class="serif">{% if row.get("Key_Challenge") %}{{ row.Key_Challenge }}{% else %}—{% endif %}</dd>
+      <dt>Support needed</dt>
+      <dd class="serif">{% if row.get("Support_Needed") %}{{ row.Support_Needed }}{% else %}—{% endif %}</dd>
+      <dt>Support from</dt>
+      <dd>
+        {% if row.get("Support_From") %}
+          {% if row.Support_From is string %}{{ row.Support_From }}
+          {% else %}{{ row.Support_From | join(", ") }}{% endif %}
+        {% else %}—{% endif %}
+      </dd>
+      <dt>Source</dt><dd><code>{{ row.get("Source", "Substrate-Drafted") }}</code></dd>
+    </dl>
+
+    <hr class="hr">
+
+    <div class="actions">
+      <a class="btn btn-primary" href="/runs/{{ thread_id }}/staged.json">Download row (JSON)</a>
+      <a class="btn" href="/runs/{{ thread_id }}/export.csv">Download row (CSV)</a>
+      <a class="btn" href="/runs/{{ thread_id }}/audit.md">Download evidence trail</a>
+      <a class="btn btn-quiet" href="/runs/{{ thread_id }}/audit">View audit</a>
+    </div>
+
+    <p class="fine">
+      Staged at <code>{{ staged_path }}</code>. Start a
+      <a href="/runs/new">new run</a> if the evidence has changed.
+    </p>
+  </div>
+{% endif %}
+{% endblock %}
