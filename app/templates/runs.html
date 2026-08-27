@@ -74,7 +74,13 @@
       </thead>
       <tbody>
         {% for run in runs %}
-          <tr class="rowlink">
+          <tr
+            class="rowlink"
+            data-href="/runs/{{ run.thread_id }}"
+            tabindex="0"
+            role="link"
+            aria-label="Open run {{ run.thread_id }}"
+          >
             <td>
               <a class="mono-id" href="/runs/{{ run.thread_id }}">{{ run.thread_id }}</a>
             </td>

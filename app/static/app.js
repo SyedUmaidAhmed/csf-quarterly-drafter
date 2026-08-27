@@ -6,6 +6,7 @@
  *   4. theme toggle
  *   5. approve dialog
  *   6. attention group toggles
+ *   7. runs table row navigation
  */
 
 (function () {
@@ -275,6 +276,12 @@
       return;
     }
 
+    var row = event.target.closest("tr.rowlink[data-href]");
+    if (row && !event.target.closest("a, button")) {
+      window.location.href = row.getAttribute("data-href");
+      return;
+    }
+
     if (event.target.closest("#theme-toggle")) {
       toggleTheme();
       return;
@@ -311,6 +318,15 @@
 
   document.addEventListener("keydown", function (event) {
     if (event.key === "Escape") closeApprove();
+
+    if (event.key === "Enter") {
+      var row = event.target.closest && event.target.closest("tr.rowlink[data-href]");
+      if (row && event.target === row) {
+        event.preventDefault();
+        window.location.href = row.getAttribute("data-href");
+        return;
+      }
+    }
 
     var overlay = document.getElementById("approve-dialog");
     if (!overlay || !overlay.classList.contains("open") || event.key !== "Tab")
