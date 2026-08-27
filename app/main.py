@@ -47,13 +47,21 @@ templates = Jinja2Templates(directory=PACKAGE_DIR / "templates")
 
 # Inline CSS/JS in HTML so Render free-tier cold starts still look right.
 # Edge 404s (`x-render-routing: no-server`) on /static/* while HTML succeeds
-# otherwise leave the page unstyled.
+# otherwise leave the page unstyled. Read per response so --reload and
+# template |safe stay in sync with files on disk.
 _STATIC = PACKAGE_DIR / "static"
-INLINE_CSS = "\n".join(
-    (_STATIC / name).read_text(encoding="utf-8")
-    for name in ("tokens.css", "app.css")
-)
-INLINE_JS = (_STATIC / "app.js").read_text(encoding="utf-8")
+
+
+def _inline_css() -> str:
+    return "\n".join(
+        (_STATIC / name).read_text(encoding="utf-8")
+        for name in ("tokens.css", "app.css")
+    )
+
+
+def _inline_js() -> str:
+    return (_STATIC / "app.js").read_text(encoding="utf-8")
+
 
 
 def client() -> AnthropicClient:
@@ -127,8 +135,8 @@ def shell_context(
         "thread_id": thread_id,
         "staged_path": staged_path,
         "first_doc_id": first_doc_id,
-        "inline_css": INLINE_CSS,
-        "inline_js": INLINE_JS,
+        "inline_css": _inline_css(),
+        "inline_js": _inline_js(),
     }
     if extra:
         ctx.update(extra)
@@ -560,11 +568,16 @@ def review_context(thread_id: str, state: dict) -> dict:
     docs = {doc.doc_id: doc for doc in state.get("docs", [])}
     claims = {claim.claim_id: claim for claim in state.get("claims", [])}
     first_doc = next(iter(docs), None)
+    proposals = list(row.proposals().items()) if row else []
+    acknowledged_count = sum(1 for _, p in proposals if p.edited_by_director)
 
     return {
         "thread_id": thread_id,
         "row": row,
-        "fields": list(row.proposals().items()) if row else [],
+        "fields": proposals,
+        "acknowledged_count": acknowledged_count,
+        "all_acknowledged": bool(proposals)
+        and acknowledged_count == len(proposals),
         "objective": state.get("objective", {}),
         "prior_update": state.get("prior_update", {}),
         "conflicts": state.get("conflicts", []),
@@ -646,6 +659,18 @@ async def _stage_run(thread_id: str) -> None:
     if not has_api_key():
         raise HTTPException(400, "No API key loaded. Add one before approving.")
     state = await load_state(thread_id)
+    row: DraftRow | None = state.get("row")
+    if row is None:
+        raise HTTPException(400, "No draft to approve.")
+    pending = [
+        name for name, proposal in row.proposals().items() if not proposal.edited_by_director
+    ]
+    if pending:
+        raise HTTPException(
+            400,
+            "Acknowledge every field before approving for export. "
+            f"Still needed: {', '.join(pending)}.",
+        )
     corrections = [c.model_dump() for c in state.get("corrections", [])]
 
     async with open_graph(client(), settings) as graph:

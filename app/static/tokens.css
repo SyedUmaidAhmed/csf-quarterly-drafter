@@ -4,6 +4,8 @@
  */
 
 :root {
+  color-scheme: light;
+
   --color-canvas: #f4f6f7;
   --color-surface: #ffffff;
   --color-surface-2: #eef1f2;
@@ -101,6 +103,8 @@
 }
 
 html.dark {
+  color-scheme: dark;
+
   --color-canvas: #0f1518;
   --color-surface: #151d21;
   --color-surface-2: #1b2529;
@@ -134,8 +138,14 @@ html.dark {
   --flash: #3c3a1e;
 }
 
+html.light {
+  color-scheme: light;
+}
+
 @media (prefers-color-scheme: dark) {
   html:not(.light):not(.dark) {
+    color-scheme: dark;
+
     --color-canvas: #0f1518;
     --color-surface: #151d21;
     --color-surface-2: #1b2529;
