@@ -45,6 +45,16 @@ app = FastAPI(title="CSF quarterly update drafter")
 app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=PACKAGE_DIR / "templates")
 
+# Inline CSS/JS in HTML so Render free-tier cold starts still look right.
+# Edge 404s (`x-render-routing: no-server`) on /static/* while HTML succeeds
+# otherwise leave the page unstyled.
+_STATIC = PACKAGE_DIR / "static"
+INLINE_CSS = "\n".join(
+    (_STATIC / name).read_text(encoding="utf-8")
+    for name in ("tokens.css", "app.css")
+)
+INLINE_JS = (_STATIC / "app.js").read_text(encoding="utf-8")
+
 
 def client() -> AnthropicClient:
     """The model client. Requires a key; there is no offline mode."""
@@ -117,6 +127,8 @@ def shell_context(
         "thread_id": thread_id,
         "staged_path": staged_path,
         "first_doc_id": first_doc_id,
+        "inline_css": INLINE_CSS,
+        "inline_js": INLINE_JS,
     }
     if extra:
         ctx.update(extra)

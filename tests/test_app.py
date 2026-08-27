@@ -325,7 +325,9 @@ def test_evidence_page_without_a_claim_highlights_nothing(client):
     thread_id = start_run(http)
     body = http.get(f"/runs/{thread_id}/evidence/E1").text
     assert "block-index" in body
-    assert "block-cited" not in body
+    # Class applied to a block — not the inlined stylesheet rule name alone.
+    assert 'class="block-cited"' not in body
+    assert "class='block-cited'" not in body
 
 
 def test_unknown_document_is_a_404(client):
@@ -501,7 +503,10 @@ def test_drafting_without_a_key_explains_itself(keyless):
 def test_the_draft_button_is_never_silently_disabled(keyless):
     body = keyless.get("/runs/new").text
     assert "No model connected yet" in body
-    assert "disabled" not in body, "explain instead of disabling"
+    # Attribute on controls — not the inlined `.btn:disabled` stylesheet rule.
+    assert " disabled" not in body, "explain instead of disabling"
+    assert 'disabled="' not in body
+    assert "disabled='" not in body
 
 
 def test_a_failed_run_shows_a_page_not_a_stack_trace(client, monkeypatch):
